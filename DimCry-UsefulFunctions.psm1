@@ -31,6 +31,11 @@
 #####################################
 #region "Global variables"
 
+### TheWorkingDirectory (Scope: Global) variable is used to list the exact value for the Working Directory
+[string]$Global:TheWorkingDirectory = $null
+
+### TheWorkingDirectory (Scope: Global) variable is used to list the exact value for the Working Directory
+[string]$Global:LogFilePath = "$Global:TheWorkingDirectory\Log.log"
 
 #endregion "Global variables"
 
