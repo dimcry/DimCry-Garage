@@ -31,6 +31,9 @@
 #####################################
 #region "Global variables"
 
+### TheWorkingDirectory (Global: Script) variable is used to list the exact value for the Working Directory
+$Global:TheWorkingDirectory = $null
+
 #endregion "Global variables"
 
 
@@ -39,86 +42,20 @@
 #####################################
 #region "Functions"
 
-
-
-### <summary>
-### Show-Header function is adding a header on the screen at the time the script starts
-### </summary>
-function Show-Header {
-
-    $menuprompt = $null
-
-    Clear-Host
-    $title = "| DimCry's Garage |"
-    if (!($menuprompt)) 
-    {
-        $menuprompt+="-"*$title.Length
-    }
-    Write-Host $menuprompt
-    Write-Host $title
-    Write-Host $menuprompt
-
-}
-
-### <summary>
-### Show-Menu function is used if the script is started without any parameters
-### </summary>
-### <param name="WorkingDirectory">WorkingDirectory parameter is used get the location on which the LogFile will be created.</param>
-function Show-Menu {
-
-    $menu=@"
-
-1    Test how to list the Header and the Menu (this option will reload the Header and the Menu)
-2    Test how to export data to HTML Report
-Q    Quit
-
-Select a task by number, or, Q to quit: 
-"@
-
-    $null = Show-Header
-
-    Write-Host $menu -ForegroundColor Cyan -NoNewline
-    $SwitchFromKeyboard = Read-Host
-
-    ### Providing a list of options
-    Switch ($SwitchFromKeyboard) {
-
-        ### If "1" is selected, the script will assume you have the mailbox migration logs in an .xml file
-        "1" {
-            Show-Menu
-        }
-
-        ### If "2" is selected, the script will connect you to Exchange Online
-        "2" {
-            Create-HTMLReportWithDummyData
-        }
- 
-        ### If "Q" is selected, the script will exit
-        "Q" {
-            throw "You selected to quit the menu"
-         }
- 
-        ### If you pressed any key different than "1", "2" or "Q", the Menu will reload
-        default {
-            Write-Log "[WARNING] || You selected an option that is not present in the menu (Value inserted from keyboard: `"$SwitchFromKeyboard`")" -ForegroundColor Yellow
-            Write-Log "[INFO] || Press any key to re-load the menu"
-            Read-Host
-            Show-Menu
-        }
-    } 
-}
-
-
 <#
 .SYNOPSIS
-    Function to export content from a String or CustomObject to HTML report
+    Function to export content from a String or TableStructure to HTML report
 
 .DESCRIPTION
-    Function "Export-ReportToHTML" is used to export content from a String or CustomObject to HTML report.
+    Function "Export-ReportToHTML" is used to export content from a String or TableStructure to HTML report.
     It can create the HTML report using different themes (for the moment just the "Blue" / default one is defined).
 
 .EXAMPLE
-    Export-ReportToHTML -FilePath $TheFilePath -PageTitle $PageTitle -ReportTitle $ReportTitle -TheObjectToConvertToHTML $TheObjectToConvertToHTML
+    Export-ReportToHTML -FilePath $FilePath -PageTitle $PageTitle -ReportTitle $ReportTitle -TheObjectToConvertToHTML $TheObjectToConvertToHTML
+
+	Description
+	-----------
+	This example is exporting the information into the $FilePath HTML report
 
 .NOTES
     This function can be used to convert any correctly formatted PowerShell content to an HTML report.
@@ -229,7 +166,7 @@ $HTMLBeginning = @"
 
 			h3 {
 				color: #000000;
-				font-size: 14px;
+				font-size: 17px;
 				font-weight: 300;
 				margin-left: 10px;
 				font-family: FabricMDL2Icons;
@@ -237,7 +174,7 @@ $HTMLBeginning = @"
     
 			h3 span {
 				color: #000000;
-				font-size: 14px;
+				font-size: 17px;
 				font-weight: 300;
 				margin-left: 10px;
 				font-family: FabricMDL2Icons;
@@ -256,6 +193,39 @@ $HTMLBeginning = @"
 				margin: 0 0 1em;
 				padding: 10px;
 				font-family: FabricMDL2Icons;
+			}
+
+			.ms-icon--description:before {
+				font-family: FabricMDL2Icons;
+				content: "\EA16";
+				color: #0078d7;
+				margin-right: 5px;
+				font-style: normal;
+				font-size: 20px;
+			}
+
+			.ms-icon--emojineutral:before {
+				font-family: FabricMDL2Icons;
+				content: "\EA87";
+				margin-left: 25px;
+				margin-right: -15px;
+				font-style: normal;
+			}
+
+			.ms-icon--emojihappy:before {
+				font-family: FabricMDL2Icons;
+				content: "\E76E";
+				margin-left: 25px;
+				margin-right: -15px;
+				font-style: normal;
+			}
+
+			.ms-icon--emojidisappointed:before {
+				font-family: FabricMDL2Icons;
+				content: "\EA88";
+				margin-left: 25px;
+				margin-right: -15px;
+				font-style: normal;
 			}
 
 			.label {
@@ -380,7 +350,7 @@ $HTMLBeginning = @"
 			}
 
 		   table {
-				font-size: 12px;
+				font-size: 14px;
 				font-weight: 800;
 				border: 1px solid #0078d7;
 				border-collapse: collapse;
@@ -400,7 +370,6 @@ $HTMLBeginning = @"
 			th {
 				color: #0078d7;
 				font-family: FabricMDL2Icons;
-				font-size: 11px;
 				text-transform: uppercase;
 				padding: 10px 5px;
 				vertical-align: middle;
@@ -512,16 +481,28 @@ $HTMLEnd = @"
 
     ### For each scenario, convert the data to HTML
     foreach ($Entry in $TheObjectToConvertToHTML) {
+		
+		[string]$Emoji = $null
+		if ($Entry.SectionTitleColor -eq "Green") {
+			$Emoji = "happy"
+		}
+		elseif ($Entry.SectionTitleColor -eq "Red") {
+			$Emoji = "disappointed"
+		}
+		else {
+			$Emoji = "neutral"
+		}
+
         $TheBody = $TheBody + "
         	`<section class=`"accordion`"`>
 				`<input type=`"checkbox`" name=`"collapse`" id=`"handle$i`" `>
 				`<h2 class=`"handle`"`>
 					`<label for=`"handle$i`" `>
-						`<h2 class=`"ms-font-su ms-fontColor-themePrimary`" style=`"display: inline-block; color: $($Entry.SectionTitleColor); font-size: 20px; font-weight: 650;`"`>&nbsp;&nbsp;&nbsp;&nbsp;$($Entry.SectionTitle)`</h2`>
+						`<h2 class=`"ms-font-su ms-fontColor-themePrimary`" style=`"display: inline-block; color: $($Entry.SectionTitleColor); font-size: 20px; font-weight: 650;`"`>`<i class=`"ms-icon ms-icon--emoji$Emoji`"`>`</i`>&nbsp;&nbsp;&nbsp;&nbsp;$($Entry.SectionTitle)`</h2`>
 					`</label`>
 				`</h2`>
 				`<div class=`"content`"`>
-					`<h3`>$($Entry.Description)`</h3`>
+					`<h3`>`<i class=`"ms-icon ms-icon--description`"`>`<`/i`>$($Entry.Description)`</h3`>
         "
 
         if ($Entry.DataType -eq "String") {
@@ -544,7 +525,6 @@ $HTMLEnd = @"
                     $z++
                 }
             }
-
         }
 
         ### Adding sections in the body of the HTML report
@@ -556,9 +536,7 @@ $HTMLEnd = @"
 
         $i++
     }
-
     $TheBody = $TheBody + $HTMLEnd
-
     $TheBody | Out-File $FilePath -Force
 }
 
@@ -572,9 +550,25 @@ $HTMLEnd = @"
     "Prepare-ObjectForHTMLReport" function is used to prepare the objects to be converted to HTML file
 
 .EXAMPLE
-    [PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "String" -EffectiveDataString $TheString
-    [PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "CustomObject" -EffectiveDataArrayList $($Entry.MailboxInformation) -TableType "List"
-    [PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "CustomObject" -EffectiveDataArrayList $($Entry.MailboxInformation) -TableType "Table"
+	[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "String" -EffectiveDataString $TheString
+	
+	Description
+	-----------
+	This example is preparing an object that has a string as DataType, to be listed into the HTML report
+
+.EXAMPLE	
+	[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "TableStructure" -EffectiveDataTableStructure $TheTable -TableType "List"
+
+	Description
+	-----------
+	This example is preparing an object that has a TableStructure as DataType, to be listed as a List into the HTML report
+	
+.EXAMPLE	
+	[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "TableStructure" -EffectiveDataTableStructure $TheTable -TableType "Table"
+
+	Description
+	-----------
+	This example is preparing an object that has a TableStructure as DataType, to be listed as a Table into the HTML report
 
 .NOTES
     This function can be used to correctly prepare any PowerShell content to be exported to an HTML report
@@ -582,30 +576,30 @@ $HTMLEnd = @"
 function Prepare-ObjectForHTMLReport {
 param (
     [Parameter(ParameterSetName = "String", Mandatory=$false)]
-    [Parameter(ParameterSetName = "CustomObject", Mandatory=$false)]
+    [Parameter(ParameterSetName = "TableStructure", Mandatory=$false)]
     [string]$SectionTitle,
 
     [Parameter(ParameterSetName = "String", Mandatory=$false)]
-    [Parameter(ParameterSetName = "CustomObject", Mandatory=$false)]
+    [Parameter(ParameterSetName = "TableStructure", Mandatory=$false)]
     [ValidateSet("Black", "Green", "Red")]
-    [string]$SectionTitleColor,
+    [ConsoleColor]$SectionTitleColor,
 
     [Parameter(ParameterSetName = "String", Mandatory=$false)]
-    [Parameter(ParameterSetName = "CustomObject", Mandatory=$false)]
+    [Parameter(ParameterSetName = "TableStructure", Mandatory=$false)]
     [string]$Description,
 
     [Parameter(ParameterSetName = "String", Mandatory=$false)]
-    [Parameter(ParameterSetName = "CustomObject", Mandatory=$false)]
-    [ValidateSet("CustomObject", "String")]
+    [Parameter(ParameterSetName = "TableStructure", Mandatory=$false)]
+    [ValidateSet("TableStructure", "String")]
     [string]$DataType,
 
     [Parameter(ParameterSetName = "String", Mandatory=$false)]
     [string]$EffectiveDataString,
 
-    [Parameter(ParameterSetName = "CustomObject", Mandatory=$false)]
-    [PSCustomObject]$EffectiveDataArrayList,
+    [Parameter(ParameterSetName = "TableStructure", Mandatory=$false)]
+    [PSCustomObject]$EffectiveDataTableStructure,
 
-    [Parameter(ParameterSetName = "CustomObject", Mandatory=$false)]
+    [Parameter(ParameterSetName = "TableStructure", Mandatory=$false)]
     [ValidateSet("List", "Table")]
     [string]$TableType
 )
@@ -616,8 +610,8 @@ param (
         $TheObject | Add-Member -NotePropertyName SectionTitleColor -NotePropertyValue $SectionTitleColor
         $TheObject | Add-Member -NotePropertyName Description -NotePropertyValue $Description
         $TheObject | Add-Member -NotePropertyName DataType -NotePropertyValue $DataType
-        if ($DataType -eq "CustomObject") {
-            $TheObject | Add-Member -NotePropertyName EffectiveData -NotePropertyValue $EffectiveDataArrayList
+        if ($DataType -eq "TableStructure") {
+            $TheObject | Add-Member -NotePropertyName EffectiveData -NotePropertyValue $EffectiveDataTableStructure
             $TheObject | Add-Member -NotePropertyName TableType -NotePropertyValue $TableType
         }
         else {
@@ -628,4 +622,87 @@ param (
     return $TheObject
 
 }
+
+function Test-ExportReportToHTMLUsingDummyData {
+	
+	[System.Collections.ArrayList]$TheObjectToConvertToHTML = @()
+
+	### "String1" section
+	[string]$SectionTitle = "This is the title of the `"String1`" section"
+	[ConsoleColor]$SectionTitleColor = "Green"
+	[string]$Description = "This is the description of the `"String1`" section"
+	[string]$TheString = "This is the content of the `"String1`" section"
+		[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "String" -EffectiveDataString $TheString
+	$null = $TheObjectToConvertToHTML.Add($TheCommand)
+
+	### "List" section
+	[string]$SectionTitle = "This is the title of the `"List`" section"
+	[ConsoleColor]$SectionTitleColor = "Black"
+	[string]$Description = "This is the description of the `"List`" section"
+
+		[System.Collections.ArrayList]$TheTable = @()
+		$AList = New-Object PSObject
+			$AList | Add-Member -NotePropertyName FirstRow -NotePropertyValue "A value of the first row"
+			$AList | Add-Member -NotePropertyName SecondRow -NotePropertyValue "A value of the second row"
+			$AList | Add-Member -NotePropertyName ThirdRow -NotePropertyValue "A value of the third row"
+			$AList | Add-Member -NotePropertyName FourthRow -NotePropertyValue "A value of the fourth row"
+			$AList | Add-Member -NotePropertyName FifthRow -NotePropertyValue "A value of the fifth row"
+		$null = $TheTable.Add($AList)
+
+	[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "TableStructure" -EffectiveDataTableStructure $TheTable -TableType "List"
+	$null = $TheObjectToConvertToHTML.Add($TheCommand)
+
+	### "Table" section
+	[string]$SectionTitle = "This is the title of the `"Table`" section"
+	[ConsoleColor]$SectionTitleColor = "Red"
+	[string]$Description = "This is the description of the `"Table`" section"
+
+		[System.Collections.ArrayList]$TheTable = @()
+		$ATable = New-Object PSObject
+			$ATable | Add-Member -NotePropertyName FirstRow -NotePropertyValue "A value of the first column"
+			$ATable | Add-Member -NotePropertyName SecondRow -NotePropertyValue "A value of the second column"
+			$ATable | Add-Member -NotePropertyName ThirdRow -NotePropertyValue "A value of the third column"
+			$ATable | Add-Member -NotePropertyName FourthRow -NotePropertyValue "A value of the fourth column"
+			$ATable | Add-Member -NotePropertyName FifthRow -NotePropertyValue "A value of the fifth column"
+		$null = $TheTable.Add($ATable)
+
+		$ATable = New-Object PSObject
+			$ATable | Add-Member -NotePropertyName FirstRow -NotePropertyValue "Another value of the first column"
+			$ATable | Add-Member -NotePropertyName SecondRow -NotePropertyValue "Another value of the second column"
+			$ATable | Add-Member -NotePropertyName ThirdRow -NotePropertyValue "Another value of the third column"
+			$ATable | Add-Member -NotePropertyName FourthRow -NotePropertyValue "Another value of the fourth column"
+			$ATable | Add-Member -NotePropertyName FifthRow -NotePropertyValue "Another value of the fifth column"
+		$null = $TheTable.Add($ATable)
+
+	[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "TableStructure" -EffectiveDataTableStructure $TheTable -TableType "Table"
+	$null = $TheObjectToConvertToHTML.Add($TheCommand)
+
+	### "String2" section
+	[string]$SectionTitle = "This is the title of the `"String2`" section"
+	[ConsoleColor]$SectionTitleColor = "Black"
+	[string]$Description = "This is the description of the `"String2`" section"
+	[string]$TheString = "This is the content of the `"String2`" section"
+		[PSCustomObject]$TheCommand = Prepare-ObjectForHTMLReport -SectionTitle $SectionTitle -SectionTitleColor $SectionTitleColor -Description $Description -DataType "String" -EffectiveDataString $TheString
+	$null = $TheObjectToConvertToHTML.Add($TheCommand)
+
+
+	# Export the content to an HTML report
+	### Create the folder, if doesn't exist
+	$null = New-Item -ItemType Directory "$Env:Temp\DimCryGarage" -Force
+
+	### Manually set a name of the file
+	$FilePath = "$Env:Temp\DimCryGarage\HTMLReport.HTML"
+	$PageTitle = "This is the title of the page"
+	$ReportTitle = "This is the title of the report"
+
+	Export-ReportToHTML -FilePath $FilePath -PageTitle $PageTitle -ReportTitle $ReportTitle -TheObjectToConvertToHTML $TheObjectToConvertToHTML
+
+	Write-Host "The HTML report is located on:" -ForegroundColor White
+	Write-Host "`tLong path: " -ForegroundColor White -NoNewline
+	Write-Host "$Env:Temp\DimCryGarage\HTMLReport.HTML" -ForegroundColor Cyan
+	Write-Host "`tShort path: " -ForegroundColor White -NoNewline
+	Write-Host "%temp%\DimCryGarage\HTMLReport.HTML" -ForegroundColor Cyan
+
+}
+
 #endregion "Functions"
