@@ -31,16 +31,8 @@
 #####################################
 #region "Global variables"
 
-<<<<<<< HEAD
-### TheWorkingDirectory (Scope: Global) variable is used to list the exact value for the Working Directory
-[string]$Global:TheWorkingDirectory = $null
-
-### TheWorkingDirectory (Scope: Global) variable is used to list the exact value for the Working Directory
-[string]$Global:LogFilePath = "$Global:TheWorkingDirectory\Log.log"
-=======
 ### TheWorkingDirectory (Global: Script) variable is used to list the exact value for the Working Directory
 $Global:TheWorkingDirectory = $null
->>>>>>> 29affcef4e1b67ef86d0f74a2ef57f4934d536b9
 
 #endregion "Global variables"
 
@@ -365,6 +357,7 @@ $HTMLBeginning = @"
 				font-family: FabricMDL2Icons;
 				margin-left: 10px;
 				margin-bottom: 10px;
+				margin-right: 10px;
 				text-align: center;
 			} 
 			
