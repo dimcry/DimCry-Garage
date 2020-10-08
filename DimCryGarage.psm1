@@ -769,33 +769,25 @@ function Write-Log {
     if (!$LinkedToNextEntry) {
         [string]$WriteHostTypeString = $null
 
-        if (@($Global:LogObject).Count -gt 0) {
-            $null = $Global:LogObject.Add($TheObject)
-            [int]$i = 1
-            foreach ($ObjectEntry in $Global:LogObject) {
-                if ($i -eq 1) {
-                    ### For HTML
+        $null = $Global:LogObject.Add($TheObject)
+        [int]$i = 1
+        foreach ($ObjectEntry in $Global:LogObject) {
+            if ($i -eq 1) {
+                ### For HTML
 
-                    ### For CSV and Write-Host
-                    Write-EntryOnScreenOrLOGFileSameOrNextLine -ObjectEntry $ObjectEntry -IsFirstEntry $true
-                }
-                else {
-                    ### For HTML
-
-                    ### For CSV and Write-Host
-                    Write-EntryOnScreenOrLOGFileSameOrNextLine -ObjectEntry $ObjectEntry -IsFirstEntry $false
-                }
-                $i++
+                ### For CSV and Write-Host
+                Write-EntryOnScreenOrLOGFileSameOrNextLine -ObjectEntry $ObjectEntry -IsFirstEntry $true
             }
+            else {
+                ### For HTML
 
-            $Global:LogObject.Clear()
+                ### For CSV and Write-Host
+                Write-EntryOnScreenOrLOGFileSameOrNextLine -ObjectEntry $ObjectEntry -IsFirstEntry $false
+            }
+            $i++
         }
-        else {
-            ### For HTML
 
-            ### For CSV and Write-Host
-            Write-EntryOnScreenOrLOGFileSameOrNextLine -ObjectEntry $TheObject -IsFirstEntry $true
-        }
+        $Global:LogObject.Clear()
     }
     else {
         $null = $Global:LogObject.Add($TheObject)
