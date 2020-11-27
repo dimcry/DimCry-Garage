@@ -36,7 +36,12 @@ $Global:TheWorkingDirectory = $null
 
 [System.Collections.ArrayList]$Global:LogObject = @()
 [string]$Global:LogPath = "$Env:Temp\DimCryGarage\Log.log"
+[string]$Global:HTMLLogPath = "$Env:Temp\DimCryGarage\Log.html"
 [string]$GLobal:LogEntry = $null
+    $Global:HTMLLogEntry = New-Object PSObject
+        $Global:HTMLLogEntry | Add-Member -NotePropertyName Date -TypeName string -NotePropertyValue ""
+        $Global:HTMLLogEntry | Add-Member -NotePropertyName Type -TypeName string -NotePropertyValue ""
+        $Global:HTMLLogEntry | Add-Member -NotePropertyName Description -TypeName string -NotePropertyValue ""
 
 #endregion "Global variables"
 
@@ -747,7 +752,7 @@ function Write-Log {
 
     $TheObject = New-Object PSObject
         if ($Type) {
-            [string]$Date = $((Get-Date).ToUniversalTime().ToString("dd.MM.yyyy HH:mm:ss")) + " UTC"
+            [string]$Date = $((Get-Date).ToUniversalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")) + " UTC"
 
             $TheObject | Add-Member -MemberType NoteProperty -Name Date -Value $Date
             $TheObject | Add-Member -MemberType NoteProperty -Name Type -Value $Type
@@ -764,12 +769,71 @@ function Write-Log {
         $TheObject | Add-Member -MemberType NoteProperty -Name KeyEntry -Value $KeyEntry
         $TheObject | Add-Member -MemberType NoteProperty -Name LinkedToNextEntry -Value $LinkedToNextEntry
         $TheObject | Add-Member -MemberType NoteProperty -Name Interactive -Value $Interactive
-        
+    
+    if (!(Test-Path $Global:HTMLLogPath)) {
+        Create-HTMLLogFile
+    }        
+
+    if ($TheObject.Date) {
+        $Global:HTMLLogEntry.Date = $TheObject.Date
+    }
+    if ($TheObject.Type) {
+        $Global:HTMLLogEntry.Type = $TheObject.Type
+    }
 
     if (!$LinkedToNextEntry) {
         [string]$WriteHostTypeString = $null
 
         $null = $Global:LogObject.Add($TheObject)
+
+        if (@($($TheObject.Description)).Count -gt 1) {
+            if (@($($TheObject.Description) | Get-Member -MemberType NoteProperty).Count -gt 1) {
+
+                [System.Collections.ArrayList]$TheProperties = @()
+                $ListOfMembers = ($($TheObject.Description)| Get-Member -MemberType NoteProperty).Name
+                $null = $TheProperties.Add($($TheObject.KeyEntry))
+
+                foreach ($MemberEntry in $ListOfMembers) {
+                    if ($MemberEntry -ne $($TheObject.KeyEntry)) {
+                        $null = $TheProperties.Add($MemberEntry)
+                    }
+                }
+
+                [string]$EntryToUse = $($TheObject.Description) | ConvertTo-Html -As Table -Property $TheProperties -Fragment
+                $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $EntryToUse
+            }
+            else {
+                [int]$i = 1
+                foreach ($DescriptionEntry in $($TheObject.Description)) {
+                    if ($i -le $(@($TheObject.Description).Count - 1)) {
+                        $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $DescriptionEntry + "<br>"
+                    }
+                    else {
+                        $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $DescriptionEntry
+                    }
+                    $i++
+                }
+            }
+        }
+        else {
+            if ($Global:HTMLLogEntry.Description) {
+                if ($SameLineLikePreviousEntry) {
+                    if ($Global:HTMLLogEntry.Description.EndsWith("<br>")) {
+                        $Global:HTMLLogEntry.Description = $($Global:HTMLLogEntry.Description).Substring(0,$($Global:HTMLLogEntry.Description).Length-4) + $($TheObject.Description) + "<br>"
+                    }
+                    else {
+                        $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $($TheObject.Description) + "<br>"
+                    }
+                }
+                else {
+                    $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $($TheObject.Description) + "<br>"
+                }
+            }
+            else {
+                $Global:HTMLLogEntry.Description = $($TheObject.Description)
+            }
+        }
+        
         [int]$i = 1
         foreach ($ObjectEntry in $Global:LogObject) {
             if ($i -eq 1) {
@@ -787,10 +851,51 @@ function Write-Log {
             $i++
         }
 
+        Add-EntryInHTMLLogFile -theLogToAddInHTML $Global:HTMLLogEntry -description $($Global:HTMLLogEntry.Description)
+
         $Global:LogObject.Clear()
+        $Global:HTMLLogEntry.Date = ""
+        $Global:HTMLLogEntry.Type = ""
+        $Global:HTMLLogEntry.Description = ""
+        
     }
     else {
         $null = $Global:LogObject.Add($TheObject)
+
+        if (@($($TheObject.Description) | Get-Member -MemberType NoteProperty).Count -gt 1) {
+            
+            [System.Collections.ArrayList]$TheProperties = @()
+            $ListOfMembers = ($($TheObject.Description)| Get-Member -MemberType NoteProperty).Name
+            $null = $TheProperties.Add($($TheObject.KeyEntry))
+
+            foreach ($MemberEntry in $ListOfMembers) {
+                if ($MemberEntry -ne $($TheObject.KeyEntry)) {
+                    $null = $TheProperties.Add($MemberEntry)
+                }
+            }
+
+            [string]$EntryToUse = $($TheObject.Description) | ConvertTo-Html -As Table -Property $TheProperties -Fragment
+        }
+        else {
+            [string]$EntryToUse = $($TheObject.Description)
+        }
+        
+        if (@($($TheObject.Description)).Count -gt 1) {
+            $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $EntryToUse
+        }
+        else {
+            if ($SameLineLikePreviousEntry) {
+                if ($Global:HTMLLogEntry.Description.EndsWith("<br>")) {
+                    $Global:HTMLLogEntry.Description = $($Global:HTMLLogEntry.Description).Substring(0,$($Global:HTMLLogEntry.Description).Length-4) + $($TheObject.Description) + "<br>"
+                }
+                else {
+                    $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $($TheObject.Description) + "<br>"
+                }
+            }
+            else {
+                $Global:HTMLLogEntry.Description = $Global:HTMLLogEntry.Description + $($TheObject.Description) + "<br>"
+            }
+        }
     }
 }
 
@@ -801,7 +906,7 @@ function Write-EntryOnScreenOrLOGFileSameOrNextLine {
         $ObjectEntry
     )
 
-    [string]$WriteHostDescriptionString = " " * 36
+    [string]$WriteHostDescriptionString = " " * 40
 
     if ($ObjectEntry.Type) {
         if ($($ObjectEntry.Type) -eq "INFO") {
@@ -842,6 +947,10 @@ function Write-EntryOnScreenOrLOGFileSameOrNextLine {
                 Write-Host $("`n" + "-" * $($ObjectEntry.Date).Length + "   " + "-" * $($ObjectEntry.Type + $WriteHostTypeString).Length + "   " + "-" * $($EntryToUse).Length) -ForegroundColor $($ObjectEntry.ForegroundColor) -NoNewline
                 Write-Host "`n$($ObjectEntry.Date)   $($ObjectEntry.Type)$WriteHostTypeString   $EntryToUse" -ForegroundColor $($ObjectEntry.ForegroundColor) -NoNewline
             }
+
+            if (!(Test-Path $Global:LogPath)) {
+                Add-Content -LiteralPath $Global:LogPath -Value $("Date                       " + "   " + "Type   " + "   " + "Description") -Force
+            }
             
             if ($LinkedToNextEntry) {
                 $Global:LogEntry = $("-" * $($ObjectEntry.Date).Length + "   " + "-" * $($ObjectEntry.Type + $WriteHostTypeString).Length + "   " + "-" * $($EntryToUse).Length)
@@ -849,7 +958,7 @@ function Write-EntryOnScreenOrLOGFileSameOrNextLine {
             }
             else {
                 Add-Content -LiteralPath $Global:LogPath -Value $("-" * $($ObjectEntry.Date).Length + "   " + "-" * $($ObjectEntry.Type + $WriteHostTypeString).Length + "   " + "-" * $($EntryToUse).Length) -Force
-                Add-Content -LiteralPath $Global:LogPath -Value "$($ObjectEntry.Date)   $($ObjectEntry.Type)$WriteHostTypeString   $EntryToUse" -Force            
+                Add-Content -LiteralPath $Global:LogPath -Value "$($ObjectEntry.Date)   $($ObjectEntry.Type)$WriteHostTypeString   $EntryToUse" -Force
             }
         }
         else {
@@ -958,6 +1067,663 @@ function Create-DescriptionTableEntries {
 }
 
 
+function Create-HTMLLogFile {
+    param (
+        [string]$lineToAdd
+    )
+
+$HTMLBeginning = @"
+<!DOCTYPE html>
+<html>
+	<head>
+	
+		<meta charset="UTF-8">
+		<meta name="description" content="DimCry's Garage">
+		<meta name="keywords" content="PowerShell, HTML, Report, DimCry, Garage">
+		<meta name="author" content="Cristian Dimofte">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		
+        <title>Filtrable / Searchable log file</title>
+		<link rel="titlebar icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAD0AAABOCAYAAACT1B6GAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGeSURBVHhe7duxSsNQFMbxvoCT7+Ab+Aw+hg/g6uDk4Kq4ODm4OwiC4uKkkwgigkipiBYVsWrVKmY95sBHPCml5EoOSXq/4Q8hvS3nBx1u0rSVJInEFtGxRPTeZV9aS+2JSk3WqBFN9IQUjJ5a7sjaUU92LvqNSGfVma0hGD290pHTu8/cG+qczqozWwPRiGii04huQEQjolEwevPkRWZWb7Lmtx/kbfCTva7Hes6u8UpnsbO5oXXXY9fMbXXl1aD1WM/ZNV7pLHY2ohHRKBh9cPUuC7uPWevHPfn4/kPrsZ6za7zSWexsbug6RzQiGhFNdBrRDYhoVAq6qguO2Y1bOb8f5GYZzg1d1Ta0yLeOaEQ0CkZXdcGxuP8k189fuVmGc0PXOaIR0YhootOIbkBEo1LQXpuTs+74i4kiuaG9tqGjhguN6DGfS3QRtNdNhMN2/teK/+SGrnNEI6IR0USnEd2AiEaloKN8/KKq+96j0lnsbEQjolEwOsrHJOsc0YhoRDTRaUQ3IKJRMDrKP5hOQkQjoqNExxLRsRQhOpFfossxSEw+JV4AAAAASUVORK5CYII=" />
+		
+		<link rel="stylesheet" href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-js/1.4.0/css/fabric.min.css" />
+		<link rel="stylesheet" href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-js/1.4.0/css/fabric.components.min.css" />
+		<script src="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-js/1.4.0/js/fabric.min.js"></script>
+
+		<style type="text/css">
+			.input {
+			  width: 15px;
+			  height: 24px;
+			  font-size: 18px;
+			}
+
+			#myInput {
+				font-size: 16px;
+				box-sizing: border-box;
+				font-family: FabricMDL2Icons;
+				font-size: 16px;
+				border: none;
+				outline: 1px solid #ddd;
+				padding-left: 5px;
+				padding-bottom: 5px;
+			}
+			
+			#myInput:focus {outline: 3px solid #ddd;}
+			
+			.tooltip {
+			  position: relative;
+			  display: inline-block;
+			}
+
+			.tooltip .tooltiptext {
+			  visibility: hidden;
+			  width: 120px;
+			  background-color: #fff;
+			  color: #0078d7;
+			  text-align: center;
+			  border-radius: 6px;
+			  padding: 5px 0;
+			  position: absolute;
+			  z-index: 1;
+			  bottom: 125%;
+			  left: 50%;
+			  margin-left: -60px;
+			  opacity: 0;
+			  transition: opacity 0.5s;
+			}
+
+			.tooltip .tooltiptext::after {
+			  content: "";
+			  position: absolute;
+			  top: 100%;
+			  left: 75%;
+			  margin-left: -5px;
+			  border-width: 5px;
+			  border-style: solid;
+			  border-color: #555 transparent transparent transparent;
+			}
+
+			.tooltip:hover .tooltiptext {
+			  visibility: visible;
+			  opacity: 10;
+			}
+
+			:root {
+				font-size: calc(16px + (24 - 16)*(100vw - 320px)/(1920 - 320));
+			}
+			input {
+				line-height: 1.5em;
+				color: #171717;
+			}
+
+			.dropButtonType {
+				border: none;
+				cursor: pointer;
+				border-style: none;
+				float: right;
+			}
+
+			.dropButtonType:hover, .dropButtonType:focus {
+				border: none;
+				border-style: none;
+			}
+
+			.dropdown-content {
+				display: none;
+				position: absolute;
+				background-color: #f6f6f6;
+				overflow: auto;
+				border-style: none;
+				z-index: 1;
+				resize: both;
+				min-height: 110px;
+				min-width: 130px;
+				margin-top: 10px;
+			}
+
+			.dropdown-content a {
+				color: black;
+				padding: 12px 16px;
+				text-decoration: none;
+				display: block;
+				border-style: none;
+			}
+
+			.show {
+				display: block;
+				border-style: none;
+			}
+		
+			html {
+				box-sizing: border-box;
+				font-family: FabricMDL2Icons;
+			}
+			
+			*, *:before, *:after {
+				box-sizing: inherit;
+			}			
+			
+			.ms-font-su {
+				font-family:FabricMDL2Icons;
+				-webkit-font-smoothing:antialiased;
+				font-weight:100
+			}
+			
+			.ms-fontColor-themePrimary,.ms-fontColor-themePrimary--hover:hover{
+				color:#0078d7
+			}
+			
+			@font-face{
+				font-family:FabricMDL2Icons;
+				src:url(https://spoprod-a.akamaihd.net/files/fabric/assets/icons/fabricmdl2icons.woff) format('woff'),url(https://spoprod-a.akamaihd.net/files/fabric/assets/icons/fabricmdl2icons.ttf) format('truetype');
+				font-weight:400;
+				font-style:normal
+			}
+
+			body {
+				padding: 10px;
+				font-family: FabricMDL2Icons;
+				background: #f6f6f6;
+				overflow: auto;
+			}
+			
+			a {
+				color: #06c;
+			}
+
+			h5 {
+				display: block;
+				padding: 0;
+				margin: 5px 0px 0px 0px;
+				font-size: 42px;
+				font-weight: 100;
+				font-family: FabricMDL2Icons;
+			}
+			
+			p {
+				margin: 0 0 1em;
+				padding: 10px;
+				font-family: FabricMDL2Icons;
+			}
+
+			.ms-icon--filtersolid:before {
+				font-family: FabricMDL2Icons;
+				content: "\F412";
+				color: #0078d7;
+				margin-right: 0px;
+				font-style: normal;
+				font-size: 12px;
+				float: right;
+			}
+			
+			.ms-icon--sort:before {
+				font-family: FabricMDL2Icons;
+				content: "\E8CB";
+				color: #0078d7;
+				margin-right: 5px;
+				font-style: normal;
+				font-size: 12px;
+				float: right;
+			}			
+
+			.label {
+				width: 100%;
+				height: 80px;
+				background-color: #f6f6f6;
+				color: #0078d7;
+				font-size: 46px;
+				display: inline-block;
+				box-sizing: border-box;
+			}			
+			
+			.logtypeentryerror {
+				color: Red;
+				font-style: normal;
+			}
+			
+			.logtypeentrywarning {
+				color: #ffba00;
+				font-style: normal;
+			}
+			
+			.logtypeentrysuccess {
+				color: Green;
+				font-style: normal;
+			}
+			
+			.logtypeentryinfo {
+				color: Black;
+				font-style: normal;
+			}			
+			
+		   table {
+				font-size: 14px;
+				font-weight: 800;
+				border: 1px solid #fff;
+				border-collapse: collapse;
+				font-family: FabricMDL2Icons;
+				text-align: left;
+				white-space: normal;
+			}
+			
+			td {
+				padding: 4px;
+				margin: 0px;
+				border: 1px solid #fff;
+				border-collapse: collapse;
+				vertical-align: top;
+			}
+
+			th.description {
+				border: 1px solid #fff;
+				border-collapse: collapse;
+				vertical-align: middle;
+				text-align: center;
+			}
+			
+			td.description {
+				border: 1px solid #fff;
+				border-collapse: collapse;
+				vertical-align: middle;
+			}
+			
+			th {
+				color: #0078d7;
+				font-family: FabricMDL2Icons;
+				text-transform: uppercase;
+				padding: 10px 5px;
+				border: 1px solid #fff;
+				border-collapse: collapse;
+			}
+			
+			tbody tr:nth-child(odd), tbody.description tr:nth-child(even) {
+				background: #e6f3ff;
+			}
+			
+			tbody.description tr:nth-child(odd), tbody tr:nth-child(even) {
+				background: #fff;
+			}
+
+			@media (max-device-width:480px) and (orientation:landscape) {
+				.dropdown-content {
+					margin-top: 30px;
+				}
+			}			
+			
+			@media screen and (max-width:639px){
+				h5 {
+					margin: 5px 0px 0px 0px;
+					font-size: 8vw;
+					font-weight: 100;
+					font-family: FabricMDL2Icons;
+				}
+				
+				.dropdown-content {
+					margin-top: 20px;
+				}
+			}
+		</style>
+	</head>
+	<body class="ms-Fabric" dir="ltr">
+		<header>
+			<div class="label">
+				<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAD0AAABOCAYAAACT1B6GAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGeSURBVHhe7duxSsNQFMbxvoCT7+Ab+Aw+hg/g6uDk4Kq4ODm4OwiC4uKkkwgigkipiBYVsWrVKmY95sBHPCml5EoOSXq/4Q8hvS3nBx1u0rSVJInEFtGxRPTeZV9aS+2JSk3WqBFN9IQUjJ5a7sjaUU92LvqNSGfVma0hGD290pHTu8/cG+qczqozWwPRiGii04huQEQjolEwevPkRWZWb7Lmtx/kbfCTva7Hes6u8UpnsbO5oXXXY9fMbXXl1aD1WM/ZNV7pLHY2ohHRKBh9cPUuC7uPWevHPfn4/kPrsZ6za7zSWexsbug6RzQiGhFNdBrRDYhoVAq6qguO2Y1bOb8f5GYZzg1d1Ta0yLeOaEQ0CkZXdcGxuP8k189fuVmGc0PXOaIR0YhootOIbkBEo1LQXpuTs+74i4kiuaG9tqGjhguN6DGfS3QRtNdNhMN2/teK/+SGrnNEI6IR0USnEd2AiEaloKN8/KKq+96j0lnsbEQjolEwOsrHJOsc0YhoRDTRaUQ3IKJRMDrKP5hOQkQjoqNExxLRsRQhOpFfossxSEw+JV4AAAAASUVORK5CYII=" alt="DimCry's Garage" width="auto" height="90%" style="float: left; margin-right: 15px">
+			
+				<div style="width: 100%; height: 100%; ">
+					<h5 class="ms-font-su ms-fontColor-themePrimary" style="font-weight: 350; ">
+						Filtrable / Searchable log file
+					</h5>
+				</div>
+			</div>
+        </header>
+	
+		<div style="margin-top: 10px;">
+					<form >
+						<select name="searchIn" id="searchIn" onchange="selectFromWhereToSearch(value)">
+							<option value="allEntries">Search through all entries</option>
+							<option value="descriptionEntries">Search through description entries</option>
+						</select>
+						<input type="text" id="myInput" onkeyup="searchFunction(window.theValue)" placeholder="Type here to search..." name="search" title="Type anything to search..." autocomplete="off" style="margin-top: 10px;">
+					</form>
+		</div>
+
+		<div style="margin: 10px 0px 0px 0px; display: block;">
+			<table id="myTable">
+				<tr class="header">
+					<th>
+						Date
+						<i onclick="sortTable(0)" style="font-style: normal; cursor: pointer;">
+							<i class="ms-icon ms-icon--sort"></i>
+						</i>
+					</th>
+					<th class="tooltip">
+						Type&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+						<i class="tooltiptext">Sort or filter</i>
+						<i onclick="showDropDownFilter('myTypeDropdown')" class="dropButtonType ms-icon ms-icon--filtersolid" ></i>
+						
+						<div id="myTypeDropdown" class="dropdown-content" >
+							
+							<form style="float:left; font-size: 15px;">
+								
+								<input type="checkbox" id="showall" onclick="window.visibleEntries = filterTypeColumn('showall')" checked="checked" value="showall">
+									<label for="showall">Show all...</label><br />
+								<input type="checkbox" id="info" onclick="window.visibleEntries = filterTypeColumn('info')" checked="checked" value="info">
+									<label for="info">INFO</label><br>
+								<input type="checkbox" id="success" onclick="window.visibleEntries = filterTypeColumn('success')" checked="checked" value="success">
+									<label for="success">SUCCESS</label><br />
+								<input type="checkbox" id="warning" onclick="window.visibleEntries = filterTypeColumn('warning')" checked="checked" value="warning">
+									<label for="warning">WARNING</label><br />
+								<input type="checkbox" id="error" onclick="window.visibleEntries = filterTypeColumn('error')" checked="checked" value="error">
+									<label for="error">ERROR</label><br />
+							</form>
+												
+						</div>
+						<i onclick="sortTable(1)" style="font-style: normal; cursor: pointer;">
+							<i class="ms-icon ms-icon--sort"></i>
+						</i>
+					</th>
+					<th>Description</th>
+				</tr>
+"@
+
+$HTMLEnd = @"
+			</table></div>
+
+		<div class="ms-font-su ms-fontColor-themePrimary" style="font-size: 15px; text-align: left; margin-left: 0px;">
+			<p style="margin:0px;line-height:0.5;"></p>
+			<p style="margin:0px;line-height:0.5;">Creation Date: $((Get-date).ToUniversalTime()) UTC</p>
+			<p style="margin:0px;line-height:0.5;">&copy; 2020 <a href="https://github.com/dimcry/DimCry-Garage" target="_blank" title="https://github.com/dimcry/DimCry-Garage">DimCry's Garage</a></p>
+		</div>
+		
+		<script>
+			var theValue = "allEntries";
+			var theTypeFilter = ['info', 'success', 'warning', 'error'];
+			var searchValue = "";
+			var visibleEntries = [];
+			var hiddenEntries = [];
+			myTable = document.getElementById("myTable");
+			trsFromMyTable = myTable.getElementsByClassName("filtrableTR");
+			for (var a = 0; a < trsFromMyTable.length; a++) {
+				if (trsFromMyTable[a].style.display === "") {
+					visibleEntries.push(trsFromMyTable[a]);
+				}
+			}
+			
+			function selectFromWhereToSearch(value) {
+				window.theValue = value;
+			}			
+
+			function filterTypeColumn(n) {
+				var filter, theTable, tr, i, j, txtValue;
+				var theVisibleEntries = [];
+				
+				theTable = document.getElementById("myTable");
+				tr = theTable.getElementsByClassName("filtrableTR");
+				
+				if (document.getElementById(String(n)).checked == true) {
+					if (n.toLowerCase() == "showall") {
+						theCheckBox("info", true);
+						theCheckBox("success", true);
+						theCheckBox("warning", true);
+						theCheckBox("error", true);
+						theTypeFilter = ['info', 'success', 'warning', 'error'];
+					} else {
+						if (n.toLowerCase() == "info") {
+							theTypeFilter.push('info');
+						}
+						if (n.toLowerCase() == "success") {
+							theTypeFilter.push('success');
+						}
+						if (n.toLowerCase() == "warning") {
+							theTypeFilter.push('warning');
+						}
+						if (n.toLowerCase() == "error") {
+							theTypeFilter.push('error');
+						}
+						
+						if (theTypeFilter.includes('info') && theTypeFilter.includes('success') && theTypeFilter.includes('warning') && theTypeFilter.includes('error')) {
+							theCheckBox("showall", true);
+						}
+					}
+				} else {
+					if (n.toLowerCase() == "showall") {
+						theCheckBox("info", false);
+						theCheckBox("success", false);
+						theCheckBox("warning", false);
+						theCheckBox("error", false);
+						theTypeFilter = [];
+					}
+					else {
+						theCheckBox("showall", false);
+						if (n.toLowerCase() == "info") {
+							theTypeFilter.splice(theTypeFilter.indexOf('info'), 1);
+						}
+						if (n.toLowerCase() == "success") {
+							theTypeFilter.splice(theTypeFilter.indexOf('success'), 1);
+						}
+						if (n.toLowerCase() == "warning") {
+							theTypeFilter.splice(theTypeFilter.indexOf('warning'), 1);
+						}
+						if (n.toLowerCase() == "error") {
+							theTypeFilter.splice(theTypeFilter.indexOf('error'), 1);
+						}
+					}
+				}
+
+				for (i = 0; i < tr.length; i++) {
+					td = tr[i].getElementsByTagName("td")[1];
+					if (td) {
+						txtValue = td.textContent || td.innerText;
+						if (theTypeFilter.length > 0) {
+							if (theTypeFilter.includes(txtValue.toLowerCase())) {
+								tr[i].style.display = "";
+								theVisibleEntries.push(tr[i]);
+							} else {
+								tr[i].style.display = "none";
+							}
+						}
+						else {
+							tr[i].style.display = "none";
+						}
+					}
+				}
+					searchFunction(window.searchValue);
+					
+					return theVisibleEntries;				
+			}		
+
+			function theCheckBox(elementID, boolValue) {
+				let inputs = document.getElementById(elementID);
+				inputs.checked = boolValue;
+			}
+
+			function triggerAlert(n) {
+				alert(n);
+			}
+			
+			/* When the user clicks on the filter button,
+			toggle between hiding and showing the dropdown content */
+			function showDropDownFilter(filter) {
+			  document.getElementById(filter).classList.toggle("show");
+			}
+
+			function sortTable(n) {
+				var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+				table = document.getElementById("myTable");
+				switching = true;
+				
+				//Set the sorting direction to ascending:
+				dir = "asc"; 
+				
+				/*Make a loop that will continue until
+				no switching has been done:*/
+				while (switching) {
+					//start by saying: no switching is done:
+					switching = false;
+					rows = table.rows;
+					
+					/*Loop through all table rows (except the
+					first, which contains table headers):*/
+					for (i = 1; i < (rows.length - 1); i++) {
+						//start by saying there should be no switching:
+						shouldSwitch = false;
+						
+						/*Get the two elements you want to compare,
+						one from current row and one from the next:*/
+						x = rows[i].getElementsByTagName("TD")[n];
+						y = rows[i + 1].getElementsByTagName("TD")[n];
+						
+						/*check if the two rows should switch place,
+						based on the direction, asc or desc:*/
+						if (dir == "asc") {
+							if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+								//if so, mark as a switch and break the loop:
+								shouldSwitch= true;
+								break;
+							}
+						} else if (dir == "desc") {
+							if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+								//if so, mark as a switch and break the loop:
+								shouldSwitch = true;
+								break;
+							}
+						}
+					}
+					if (shouldSwitch) {
+						/*If a switch has been marked, make the switch
+						and mark that a switch has been done:*/
+						rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+						switching = true;
+						//Each time a switch is done, increase this count by 1:
+						switchcount ++;      
+					} else {
+						/*If no switching has been done AND the direction is "asc",
+						set the direction to "desc" and run the while loop again.*/
+						if (switchcount == 0 && dir == "asc") {
+							dir = "desc";
+							switching = true;
+						}
+					}
+				}
+			}
+
+			window.addEventListener("click", function(event) {
+				if (!event.target.matches('.dropButtonDate')) {
+					if (!event.target.matches('.dropButtonType')) {
+						var dropdowns = document.getElementsByClassName("dropdown-content");
+					}	
+					else {
+						var dropdowns = document.getElementById("myDateDropdown");
+					}
+				}
+				else if (!event.target.matches('.dropButtonType')) {
+					if (!event.target.matches('.dropButtonDate')) {
+						var dropdowns = document.getElementsByClassName("dropdown-content");
+					}
+					else {
+						var dropdowns = document.getElementById("myTypeDropdown");
+					}
+				}
+
+				if (dropdowns) {
+					for (let i = 0; i < dropdowns.length; i++) {
+						var openDropdown = dropdowns[i];
+						if (openDropdown.classList.contains('show')) {
+							openDropdown.classList.remove('show');
+						}
+					}
+				}
+			})
+		
+			function searchFunction(value) {
+				var input, filter, theTable, tr, td, i, j;
+				input = document.getElementById("myInput");
+				window.searchValue = value;
+				filter = input.value.toUpperCase();
+				theTable = document.getElementById("myTable");
+
+				tr = window.visibleEntries;
+
+				if (theTypeFilter.length > 0) {
+					if (value == "allEntries") {
+						for (i = 0; i < tr.length; i++) {
+							var tds = tr[i].getElementsByTagName("td");
+							txtValue = tds[1].textContent || tds[1].innerText;
+							var flag = false;
+							if (theTypeFilter.includes(txtValue.toLowerCase())) {
+								for (j = 0; j < tds.length; j++){
+									var td = tds[j];
+									if (td.innerHTML.toUpperCase().indexOf(filter) > -1) {
+										flag = true;
+									}
+								}
+							}
+							if (flag){
+								tr[i].style.display = "";
+							}
+							else {
+								tr[i].style.display = "none";
+							}
+						}
+					}
+					else if (value == "descriptionEntries") {
+						for (i = 0; i < tr.length; i++) {
+							var tds = tr[i].getElementsByTagName("td");
+							txtValue = tds[1].textContent || tds[1].innerText;
+							var flag = false;
+							if (theTypeFilter.includes(txtValue.toLowerCase())) {
+								var td = tds[2];
+								if (td.innerHTML.toUpperCase().indexOf(filter) > -1) {
+									tr[i].style.display = "";
+								}
+								else {
+									tr[i].style.display = "none";
+								}
+							}
+						}
+					}
+				}
+				else {
+					for (i = 0; i < tr.length; i++) {
+							tr[i].style.display = "none";
+					}
+				}
+			}
+		</script>
+	</body>
+</html>			
+"@
+    [string]$TheBody = $HTMLBeginning
+    $TheBody = $TheBody + $lineToAdd
+    $TheBody = $TheBody + $HTMLEnd
+    $TheBody | Out-File $Global:HTMLLogPath -Force
+
+}
+
+
+function Add-EntryInHTMLLogFile {
+    param (
+        $theLogToAddInHTML,
+        $description
+    )
+
+    [string]$theLineToAdd = "
+				`<tr class=`"filtrableTR`"`>
+					`<td class=`"filtrableTD`"`>$($theLogToAddInHTML.Date)`<`/td`>
+					`<td class=`"filtrableTD`"`>`<i class=`"logtypeentry$($theLogToAddInHTML.Type.ToLower())`"`>$($theLogToAddInHTML.Type)`<`/i`>`<`/td`>
+					`<td class=`"filtrableTD`"`>$description`<`/td`>
+				`<`/tr`>
+`<`/table`>`<`/div`>
+"
+
+    $theHTMLFile = Get-Content $Global:HTMLLogPath -Force
+    $newHTMLFile = $theHTMLFile.Replace("</table></div>",$theLineToAdd)
+
+    $newHTMLFile | Out-File $Global:HTMLLogPath -Force
+
+}
+
+
 function Test-WriteLogWithDummyData {
 
     ### Testing single entry with a description that contains an table with one column
@@ -996,7 +1762,7 @@ function Test-WriteLogWithDummyData {
     ### Testing single entries with a description that contains string - NonInteractive, means will not be listed on screen
     Write-Log -Type INFO -Description "An INFO text, NonInteractive" -Interactive:$false
     Write-Log -Type WARNING -Description "An WARNING text, NonInteractive" -Interactive:$false
-    Write-Log -Type SUCCESS -Description "An SUCCESS text, NonInteractive" -Interactive:$false
+	Write-Log -Type SUCCESS -Description "An SUCCESS text, NonInteractive" -Interactive:$false
 
     ### Testing multiple string entries, that need to list test on the same line, or next line, with different colors
     Write-Log -Type INFO -Description "Details for " -LinkedToNextEntry
