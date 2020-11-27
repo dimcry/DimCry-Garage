@@ -1777,6 +1777,14 @@ function Test-WriteLogWithDummyData {
     ### Testing multiple entries, that contains multiple tables with one or multiple columns
     Write-Log -Type ERROR -Description (Get-Process | select -First 5 ProcessName, Id, Handles, SI) -KeyEntry ProcessName -LinkedToNextEntry
     Write-Log -Description $MultipleDescriptionEntries -ForegroundColor Cyan
+
+    Write-Host
+    Write-Host
+    Write-Host
+	Write-Host "The filtrable and searchable .html log file is located on:" -ForegroundColor White
+	Write-Host "`t$Global:HTMLLogPath" -ForegroundColor Cyan
+	Write-Host "The .log log file is located on:" -ForegroundColor White
+	Write-Host "`t$Global:LogPath" -ForegroundColor Cyan
 }
 
 
